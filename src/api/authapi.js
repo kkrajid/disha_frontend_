@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000/api/auth/';
+const API_URL = 'https://disha-backend-d0cr.onrender.com/api/auth/';
 
 const api = axios.create({
   baseURL: API_URL,
