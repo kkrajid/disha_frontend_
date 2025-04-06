@@ -1,25 +1,24 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import logo from "../assets/logo.png";
 import * as pdfjs from "pdfjs-dist";
 import mammoth from "mammoth";
-import { updateProfile, getProfile } from "../api/authapi";
+import { updateProfile, getProfile, logout } from "../api/authapi";
+
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 const industries = [
-    "Arts & Design",
-    "Education",
-    "Engineering",
-    "Finance",
-    "Healthcare",
-    "Hospitality",
-    "Marketing",
-    "Technology",
+  "Arts & Design",
+  "Education",
+  "Engineering",
+  "Finance",
+  "Healthcare",
+  "Hospitality",
+  "Marketing",
+  "Technology",
 ];
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "YOUR_DEFAULT_API_KEY";
-
-// Replace with your actual key
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
 const ProfileSetup = () => {
@@ -277,142 +276,241 @@ const ProfileSetup = () => {
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
+
   return (
-    <div className="flex flex-col min-h-screen bg-gray-100">
-      <header className="fixed top-0 left-0 right-0 bg-white py-3 px-4 sm:px-6 flex justify-between items-center z-10 shadow-md">
-        <div className="flex items-center">
-          <button
-            onClick={() => navigate(-1)}
-            className="bg-gray-700 text-white rounded-full p-2 sm:p-3 mr-3 sm:mr-4"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
+    <div className="flex flex-col min-h-screen bg-gray-50 px-4 sm:px-6">
+      <header className="fixed top-0 left-0 right-0 bg-white py-4 px-4 sm:px-6 flex justify-between items-center z-10 shadow-sm">
+        <button onClick={() => navigate(-1)} className="flex items-center">
           <img src={logo} alt="DISHA Logo" className="h-8 sm:h-10 w-auto" />
-        </div>
-        <div className="flex items-center gap-2 sm:gap-3">
-          <span className="text-sm sm:text-base font-medium text-gray-800">{name || "User"}</span>
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#4CA1E2] flex items-center justify-center text-white">
-            {name.charAt(0) || "U"}
-          </div>
+        </button>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-gray-800 hidden sm:block">
+            {name || "User"}
+          </span>
+          <Link
+            to="/profile-setup"
+            className="w-9 h-9 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 flex items-center justify-center overflow-hidden shadow-sm"
+          >
+            <div className="w-full h-full flex items-center justify-center text-white font-bold">
+              {name?.charAt(0) || "U"}
+            </div>
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="text-sm text-gray-600 hover:text-gray-800 font-medium hidden sm:block"
+          >
+            Logout
+          </button>
         </div>
       </header>
 
-      <main className="flex-1 pt-16 sm:pt-20 pb-6">
-        <div className="w-full max-w-lg mx-auto">
-          {error && <div className="text-red-500 text-center mb-4">{error}</div>}
-          <form onSubmit={handleSubmit}>
-            <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-lg border border-gray-100 mb-6">
-              <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-[#3AADE1]">
-                Upload Resume
+      <main className="flex-1 pt-16 sm:pt-20 pb-16">
+        <div className="w-full max-w-3xl mx-auto">
+          <div className="relative rounded-2xl overflow-hidden mb-6 h-48 sm:h-56 shadow-lg">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-800" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+            <div className="relative h-full flex flex-col justify-end p-6 text-white">
+              <h2 className="text-xl sm:text-2xl font-bold mb-2">
+                {name ? `Complete your profile, ${name.split(' ')[0]}` : "Complete your profile"}
               </h2>
-              <label className="block">
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.txt"
-                  onChange={handleResumeUpload}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#3AADE1] file:text-white hover:file:bg-[#2C8EB6]"
-                  disabled={isUploading}
-                />
-              </label>
-              {isUploading && (
-                <div className="mt-2 text-sm text-gray-600">
-                  <div className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-[#3AADE1]" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              <p className="text-sm sm:text-base opacity-90">
+                Help us personalize your experience by providing your details
+              </p>
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 rounded-xl p-4 text-red-600 text-center mb-4 text-sm">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            <div className="bg-white rounded-2xl p-5 shadow-md border border-gray-100 mb-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
+                Upload Resume (Optional)
+              </h2>
+              <div className="space-y-4">
+                <label className="block">
+                  <div className="flex items-center justify-center w-full">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <svg
+                          className="w-8 h-8 mb-4 text-gray-500"
+                          aria-hidden="true"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 20 16"
+                        >
+                          <path
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"
+                          />
+                        </svg>
+                        <p className="mb-2 text-sm text-gray-500">
+                          <span className="font-semibold">Click to upload</span> or drag and drop
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          PDF, DOC, DOCX (MAX. 5MB)
+                        </p>
+                      </div>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.txt"
+                        onChange={handleResumeUpload}
+                        className="hidden"
+                        disabled={isUploading}
+                      />
+                    </label>
+                  </div>
+                </label>
+
+                {isUploading && (
+                  <div className="flex items-center text-sm text-gray-600">
+                    <svg
+                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-500"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
                     </svg>
                     {parsingStatus}
                   </div>
-                </div>
-              )}
-              {!isUploading && parsingStatus && (
-                <div className="mt-2 text-sm text-green-600">{parsingStatus}</div>
-              )}
-            </div>
+                )}
 
-            <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-lg border border-gray-100 mb-6">
-              <h2 className="text-xl sm:text-2xl font-semibold text-center mb-4 sm:mb-6 text-[#3AADE1]">
-                Fill Up Your Profile
-              </h2>
-              <div className="space-y-4">
-                <input
-                  type="text"
-                  placeholder="Full Name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-gray-50 rounded-lg p-3 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#3AADE1]"
-                  required
-                  disabled
-                />
-                <input
-                  type="text"
-                  placeholder="Highest Qualification"
-                  value={qualification}
-                  onChange={(e) => setQualification(e.target.value)}
-                  className="w-full bg-gray-50 rounded-lg p-3 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#3AADE1]"
-                  required
-                />
-                <input
-                  type="date"
-                  value={dateOfBirth}
-                  onChange={(e) => setDateOfBirth(e.target.value)}
-                  className="w-full bg-gray-50 rounded-lg p-3 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#3AADE1]"
-                  required
-                />
-                <input
-                  type="text"
-                  placeholder="Complete Address"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  className="w-full bg-gray-50 rounded-lg p-3 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#3AADE1]"
-                  required
-                />
-                <input
-                  type="tel"
-                  placeholder="Mobile Number"
-                  value={mobileNumber}
-                  onChange={(e) => setMobileNumber(e.target.value)}
-                  className="w-full bg-gray-50 rounded-lg p-3 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#3AADE1]"
-                  required
-                  disabled
-                />
+                {!isUploading && parsingStatus && (
+                  <div className="text-sm text-green-600">{parsingStatus}</div>
+                )}
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-lg border border-gray-100 mb-6">
-              <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-[#3AADE1]">
+            <div className="bg-white rounded-2xl p-5 shadow-md border border-gray-100 mb-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
+                Personal Information
+              </h2>
+              <div className="space-y-4">
+                <div className="relative">
+                  <label className="absolute -top-2 left-3 bg-white px-1 text-xs text-gray-500">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full bg-transparent border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                    disabled
+                  />
+                </div>
+
+                <div className="relative">
+                  <label className="absolute -top-2 left-3 bg-white px-1 text-xs text-gray-500">
+                    Highest Qualification
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. B.Tech in Computer Science"
+                    value={qualification}
+                    onChange={(e) => setQualification(e.target.value)}
+                    className="w-full bg-transparent border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div className="relative">
+                  <label className="absolute -top-2 left-3 bg-white px-1 text-xs text-gray-500">
+                    Date of Birth
+                  </label>
+                  <input
+                    type="date"
+                    value={dateOfBirth}
+                    onChange={(e) => setDateOfBirth(e.target.value)}
+                    className="w-full bg-transparent border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div className="relative">
+                  <label className="absolute -top-2 left-3 bg-white px-1 text-xs text-gray-500">
+                    Complete Address
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Street, City, State, Pincode"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    className="w-full bg-transparent border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div className="relative">
+                  <label className="absolute -top-2 left-3 bg-white px-1 text-xs text-gray-500">
+                    Mobile Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={mobileNumber}
+                    onChange={(e) => setMobileNumber(e.target.value)}
+                    className="w-full bg-transparent border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                    disabled
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-5 shadow-md border border-gray-100 mb-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
                 Industry Preferences
               </h2>
               <div className="flex flex-wrap gap-2 mb-4">
                 {selectedIndustries.map((industry) => (
-                  <div key={industry} className="bg-[#3AADE1] text-white px-3 py-1 rounded-full flex items-center gap-2">
+                  <div
+                    key={industry}
+                    className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full flex items-center gap-2 text-sm"
+                  >
                     <span>{industry}</span>
-                    <button type="button" onClick={() => handleIndustryToggle(industry)}>
+                    <button
+                      type="button"
+                      onClick={() => handleIndustryToggle(industry)}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
                       ×
                     </button>
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-4">
+              <div className="grid grid-cols-2 gap-3 mb-4">
                 {industries.map((industry) => (
                   <button
                     key={industry}
                     type="button"
                     onClick={() => handleIndustryToggle(industry)}
-                    className={`p-3 rounded-lg text-sm font-medium ${
+                    className={`p-3 rounded-xl text-sm font-medium ${
                       selectedIndustries.includes(industry)
-                        ? "bg-[#2C8EB6] text-white"
-                        : "bg-[#3AADE1]/20 text-[#3AADE1] hover:bg-[#3AADE1]/30"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-800 hover:bg-gray-200"
                     }`}
                   >
                     {industry}
@@ -420,20 +518,25 @@ const ProfileSetup = () => {
                 ))}
               </div>
               <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Add custom industry"
-                  value={customIndustry}
-                  onChange={(e) => setCustomIndustry(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && customIndustry.trim()) {
-                      e.preventDefault();
-                      handleIndustryToggle(customIndustry.trim());
-                      setCustomIndustry("");
-                    }
-                  }}
-                  className="flex-1 bg-gray-50 rounded-lg p-3 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#3AADE1]"
-                />
+                <div className="relative flex-1">
+                  <label className="absolute -top-2 left-3 bg-white px-1 text-xs text-gray-500">
+                    Custom Industry
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Add an industry not listed"
+                    value={customIndustry}
+                    onChange={(e) => setCustomIndustry(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && customIndustry.trim()) {
+                        e.preventDefault();
+                        handleIndustryToggle(customIndustry.trim());
+                        setCustomIndustry("");
+                      }
+                    }}
+                    className="w-full bg-transparent border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -442,24 +545,28 @@ const ProfileSetup = () => {
                       setCustomIndustry("");
                     }
                   }}
-                  className="bg-[#3AADE1] text-white px-4 py-2 rounded-lg"
+                  className="self-end py-3 px-4 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700"
                 >
                   Add
                 </button>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-lg border border-gray-100 mb-6">
-              <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-[#3AADE1]">
+            <div className="bg-white rounded-2xl p-5 shadow-md border border-gray-100 mb-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
                 Skills
               </h2>
               <div className="flex flex-wrap gap-2 mb-4">
                 {skills.map((skill, index) => (
-                  <div key={`${skill}-${index}`} className="bg-[#3AADE1] text-white px-3 py-1 rounded-full flex items-center gap-2">
+                  <div
+                    key={`${skill}-${index}`}
+                    className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full flex items-center gap-2 text-sm"
+                  >
                     <span>{skill}</span>
                     <button
                       type="button"
                       onClick={() => setSkills(skills.filter((_, i) => i !== index))}
+                      className="text-blue-600 hover:text-blue-800"
                     >
                       ×
                     </button>
@@ -467,20 +574,25 @@ const ProfileSetup = () => {
                 ))}
               </div>
               <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Add skill"
-                  value={newSkill}
-                  onChange={(e) => setNewSkill(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && newSkill.trim()) {
-                      e.preventDefault();
-                      handleAddSkill(newSkill.trim());
-                      setNewSkill("");
-                    }
-                  }}
-                  className="flex-1 bg-gray-50 rounded-lg p-3 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#3AADE1]"
-                />
+                <div className="relative flex-1">
+                  <label className="absolute -top-2 left-3 bg-white px-1 text-xs text-gray-500">
+                    Add Skill
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. JavaScript, Photoshop, Digital Marketing"
+                    value={newSkill}
+                    onChange={(e) => setNewSkill(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newSkill.trim()) {
+                        e.preventDefault();
+                        handleAddSkill(newSkill.trim());
+                        setNewSkill("");
+                      }
+                    }}
+                    className="w-full bg-transparent border border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -489,17 +601,17 @@ const ProfileSetup = () => {
                       setNewSkill("");
                     }
                   }}
-                  className="bg-[#3AADE1] text-white px-4 py-2 rounded-lg"
+                  className="self-end py-3 px-4 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700"
                 >
                   Add
                 </button>
               </div>
             </div>
 
-            <div className="flex justify-center pb-6">
+            <div className="flex justify-center">
               <button
                 type="submit"
-                className="w-full max-w-xs py-3 sm:py-4 rounded-lg bg-[#3AADE1] text-white text-lg sm:text-xl font-semibold"
+                className="w-full max-w-md py-3.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-medium text-sm hover:shadow-md transition-all duration-200 active:scale-95"
               >
                 Save Profile
               </button>

@@ -14,13 +14,38 @@ export const useDynamicContent = () => {
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState({});
 
-  // Fetch user profile on component mount
+  // Get current date dynamically
+  const getCurrentDate = () => new Date(); // Today: April 06, 2025
+  const currentDate = getCurrentDate();
+  const CURRENT_YEAR = currentDate.getFullYear(); // 2025
+  const CURRENT_MONTH = currentDate.getMonth(); // 3 (April, 0-based)
+  const CURRENT_DAY = currentDate.getDate(); // 6
+
+  // Fetch and filter user profile for today's data, then this month's
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         const profileData = await getProfile();
         const { user, profile } = profileData;
-        
+
+        // Helper function to filter by date (today first, then month)
+        const filterByDate = (items, yearField) => {
+          if (!Array.isArray(items)) return items || [];
+          return items.filter(item => {
+            const date = new Date(item[yearField] || item);
+            const yearMatch = date.getFullYear() === CURRENT_YEAR;
+            const monthMatch = date.getMonth() === CURRENT_MONTH;
+            const dayMatch = date.getDate() === CURRENT_DAY;
+            return yearMatch && (dayMatch || monthMatch); // Today or this month
+          }).sort((a, b) => { // Prioritize today
+            const aDate = new Date(a[yearField] || a);
+            const bDate = new Date(b[yearField] || b);
+            const aIsToday = aDate.getDate() === CURRENT_DAY;
+            const bIsToday = bDate.getDate() === CURRENT_DAY;
+            return (bIsToday ? 1 : 0) - (aIsToday ? 1 : 0); // Today first
+          });
+        };
+
         setUserProfile({
           name: `${user.first_name} ${user.last_name}`,
           qualification: profile.qualification || "",
@@ -30,15 +55,15 @@ export const useDynamicContent = () => {
           email: user.email,
           skills: profile.skills || [],
           industries: profile.industries || [],
-          experience: profile.experience || [],
-          education: profile.education || []
+          experience: filterByDate(profile.experience || [], "start_date"), // Assuming start_date
+          education: filterByDate(profile.education || [], "end_date") // Assuming end_date
         });
       } catch (err) {
         setError(err.error || "Failed to load profile");
         console.error("Error fetching profile:", err);
       }
     };
-    
+
     fetchProfile();
   }, []);
 
@@ -48,18 +73,15 @@ export const useDynamicContent = () => {
     setError(null);
 
     try {
-      // Add retry logic
       const maxRetries = 2;
       let retries = 0;
       let response = null;
-      
+
       while (retries <= maxRetries) {
         try {
           response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
               generationConfig: {
@@ -67,21 +89,18 @@ export const useDynamicContent = () => {
                 topK: 40,
                 topP: 0.95,
                 maxOutputTokens: 1024,
-              }
+              },
             }),
           });
-          
+
           if (response.ok) break;
-          
-          // If rate limited (429) or server error (5xx), retry
+
           if (response.status === 429 || response.status >= 500) {
             retries++;
-            // Exponential backoff
             await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
             continue;
           }
-          
-          // For other errors, don't retry
+
           throw new Error(`API request failed with status ${response.status}`);
         } catch (e) {
           if (retries >= maxRetries) throw e;
@@ -97,9 +116,7 @@ export const useDynamicContent = () => {
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-      if (!text) {
-        throw new Error("No content generated");
-      }
+      if (!text) throw new Error("No content generated");
 
       return text;
     } catch (err) {
@@ -111,7 +128,7 @@ export const useDynamicContent = () => {
     }
   }, []);
 
-  // Create prompt for different tabs
+  // Create prompt for different tabs, prioritizing today then this month
   const createPrompt = useCallback((tab) => {
     if (!userProfile) return "";
 
@@ -121,7 +138,6 @@ export const useDynamicContent = () => {
     const experienceStr = experience ? (Array.isArray(experience) ? experience.join(", ") : experience) : "";
     const educationStr = education ? (Array.isArray(education) ? education.join(", ") : education) : "";
 
-    // Common profile information used across all prompts
     const profileInfo = `
       - Name: ${name}
       - Qualification: ${qualification}
@@ -131,52 +147,47 @@ export const useDynamicContent = () => {
       ${educationStr ? `- Education: ${educationStr}` : ''}
     `;
 
-    // Tab-specific prompts
+    const todayStr = currentDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }); // "April 6, 2025"
+    const monthStr = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" }); // "April 2025"
+    const dateRestriction = `Prioritize data relevant to today (${todayStr}). If insufficient data is available, include data from this month (${monthStr}). Exclude anything outside this month.`;
+
     switch (tab) {
       case "courses":
         return `Based on this profile:
           ${profileInfo}
+          ${dateRestriction}
           
-          Generate 6 relevant courses that would be beneficial for career growth. 
-          Return ONLY a JSON array with objects containing these fields: 
-          title, duration, provider, fee (in INR), url (a real course website from platforms like Coursera, Udemy, or edX), buttonText (set as "Enroll Now").
-          Use a conversion rate of 1 USD = ${CURRENCY_CONVERSION_RATE} INR if needed.
-          Don't include any explanations before or after the JSON.`;
+          Generate 6 relevant courses available today or this month for career growth. 
+          Return ONLY a JSON array with objects containing: title, duration, provider, fee (in INR), url (real course website like Coursera, Udemy, or edX), buttonText ("Enroll Now").
+          Use a conversion rate of 1 USD = ${CURRENCY_CONVERSION_RATE} INR.`;
 
       case "jobs":
         return `Based on this profile:
           ${profileInfo}
+          ${dateRestriction}
           
-          Generate 6 relevant job opportunities that match this profile.
-          Return ONLY a JSON array with objects containing these fields: 
-          title, experience, provider, salary (in INR), location, url (a real job posting website like LinkedIn, Indeed, or Naukri), buttonText (set as "Apply Now").
-          Use a conversion rate of 1 USD = ${CURRENCY_CONVERSION_RATE} INR if needed.
-          Don't include any explanations before or after the JSON.`;
+          Generate 6 relevant job opportunities posted or active today or this month.
+          Return ONLY a JSON array with objects containing: title, experience, provider, salary (in INR), location, url (real job site like LinkedIn, Indeed, or Naukri), buttonText ("Apply Now").
+          Use a conversion rate of 1 USD = ${CURRENCY_CONVERSION_RATE} INR.`;
 
       case "examHelper":
         return `Based on this profile:
           ${profileInfo}
+          ${dateRestriction}
           
-          Generate 4 relevant exam preparation resources or certifications that would enhance this person's career.
-          Return ONLY a JSON array with objects containing these fields: 
-          title, description, conductingBody, eligibility (include age limits, educational qualifications required), 
-          applicationProcess (how to apply), examDate (or frequency if recurring), 
-          fee (in INR), syllabus (key topics covered), url (official website), 
-          buttonText (set as "Learn More").
-          Use a conversion rate of 1 USD = ${CURRENCY_CONVERSION_RATE} INR if needed.
-          Don't include any explanations before or after the JSON.`;
+          Generate 4 relevant exam preparation resources or certifications scheduled for today or this month.
+          Return ONLY a JSON array with objects containing: title, description, conductingBody, eligibility, applicationProcess, examDate (today or in ${monthStr}), fee (in INR), syllabus, url (official website), buttonText ("Learn More").
+          Use a conversion rate of 1 USD = ${CURRENCY_CONVERSION_RATE} INR.`;
 
       case "mockInterview":
         return `Based on this profile:
           ${profileInfo}
+          ${dateRestriction}
           
-          Generate 6 mock interview scenarios relevant to the skills and industries.
-          Return ONLY a JSON array with objects containing these fields: 
-          title, difficulty, duration, topics, url (a real AI interview practice website like Interviewing.io, Pramp, or LeetCode), buttonText (set as "Start Practice").
-          Don't include any explanations before or after the JSON.`;
+          Generate 6 mock interview scenarios relevant to today or this month’s skills and industries.
+          Return ONLY a JSON array with objects containing: title, difficulty, duration, topics, url (real AI interview site like Interviewing.io, Pramp, or LeetCode), buttonText ("Start Practice").`;
 
       case "sampleQuestions":
-        // Reference exam data if available
         const examReferences = dynamicData.examHelper 
           ? `Focus on these exams: ${dynamicData.examHelper.map(e => e.title).join(", ")}.`
           : "";
@@ -184,92 +195,65 @@ export const useDynamicContent = () => {
         return `Based on this profile:
           ${profileInfo}
           ${examReferences}
+          ${dateRestriction}
           
-          Generate 5 sample exam questions with answers that would help prepare for certification exams related to the user's skills and industries.
-          Each question should follow a professional exam format with multiple choice options where applicable.
-          Group questions by subject area (like Programming, Database, Networking, etc).
-          
-          Return ONLY a JSON array with objects containing these fields: 
-          subject (the topic area), question, options (array of possible answers if multiple choice), 
-          correctAnswer, explanation (brief explanation of why this is correct).
-          
-          The questions should test both conceptual knowledge and practical application.
-          Include a mix of easy, medium and difficult questions.
-          Don't include any explanations before or after the JSON.`;
+          Generate 5 sample exam questions with answers for certifications relevant to today or this month.
+          Return ONLY a JSON array with objects containing: subject, question, options (if multiple choice), correctAnswer, explanation.
+          Group by subject area (e.g., Programming, Database).`;
 
       case "progress":
         return `Based on this profile:
           ${profileInfo}
+          ${dateRestriction}
           
-          Generate 6 progress indicators showing the user's potential career journey.
-          Return ONLY a JSON array with objects containing these fields: 
-          milestone (a brief title), description (details about this career milestone),
-          timeframe (estimated time to achieve this milestone).
-          Don't include any explanations before or after the JSON.`;
+          Generate 6 progress indicators for the user's career journey today or this month.
+          Return ONLY a JSON array with objects containing: milestone, description, timeframe (today or within ${monthStr}).`;
 
       case "trends":
         return `Based on this profile:
           ${profileInfo}
+          ${dateRestriction}
           
-          Generate 6 current industry trends that are relevant to these industries and skills.
-          Return ONLY a JSON array with objects containing these fields: 
-          title (trend name), description (brief explanation of the trend),
-          impact (how this might affect the user's career prospects),
-          action (what the user should do to capitalize on this trend).
-          Don't include any explanations before or after the JSON.`;
+          Generate 6 industry trends relevant to today or this month for these industries and skills.
+          Return ONLY a JSON array with objects containing: title, description, impact, action.`;
 
       case "salary":
         return `Based on this profile:
           ${profileInfo}
+          ${dateRestriction}
           
-          Generate 6 salary comparisons for positions relevant to these skills and industries.
-          Return ONLY a JSON array with objects containing these fields: 
-          title (job title), averageSalary (in INR, national average),
-          entrySalary (in INR, for entry level), seniorSalary (in INR, for senior level),
-          growthOutlook (brief description of salary growth potential).
-          Use a conversion rate of 1 USD = ${CURRENCY_CONVERSION_RATE} INR if needed.
-          Don't include any explanations before or after the JSON.`;
+          Generate 6 salary comparisons for positions active today or this month.
+          Return ONLY a JSON array with objects containing: title, averageSalary (in INR), entrySalary (in INR), seniorSalary (in INR), growthOutlook.
+          Use a conversion rate of 1 USD = ${CURRENCY_CONVERSION_RATE} INR.`;
 
       case "studyMaterial":
         return `Based on this profile:
           ${profileInfo}
+          ${dateRestriction}
           
-          Generate 6 recommended study materials that would help with exam preparation 
-          and skill development relevant to the user's profile.
-          Return ONLY a JSON array with objects containing these fields: 
-          title, type (Book/Online Course/Video Series/Documentation), 
-          author, description, difficulty (Beginner/Intermediate/Advanced), 
-          url (for accessing the material), cost (in INR), timeToComplete (estimated hours).
-          Use a conversion rate of 1 USD = ${CURRENCY_CONVERSION_RATE} INR if needed.
-          Don't include any explanations before or after the JSON.`;
+          Generate 6 recommended study materials available today or this month for exam preparation and skill development.
+          Return ONLY a JSON array with objects containing: title, type, author, description, difficulty, url, cost (in INR), timeToComplete.
+          Use a conversion rate of 1 USD = ${CURRENCY_CONVERSION_RATE} INR.`;
 
       default:
         return "";
     }
   }, [userProfile, dynamicData]);
 
-  // Parse generated content into usable data
+  // Parse generated content (unchanged)
   const parseGeneratedContent = useCallback((content, tab) => {
     if (!content) return [];
 
     try {
-      // First try to extract JSON from markdown code block
       const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[1]);
-      }
+      if (jsonMatch) return JSON.parse(jsonMatch[1]);
 
-      // If no code block, try to find raw JSON array
       const arrayMatch = content.match(/\[\s*\{[\s\S]*\}\s*\]/);
-      if (arrayMatch) {
-        return JSON.parse(arrayMatch[0]);
-      }
+      if (arrayMatch) return JSON.parse(arrayMatch[0]);
 
-      // If neither works, try parsing the entire content as JSON
       try {
         return JSON.parse(content);
       } catch (e) {
-        // Last resort: Try to sanitize the content by removing non-JSON characters
         const sanitized = content.replace(/^[^[]*/, '').replace(/[^\]]*$/, '');
         return JSON.parse(sanitized);
       }
@@ -280,21 +264,22 @@ export const useDynamicContent = () => {
     }
   }, []);
 
-  // Check if data needs to be refreshed (older than 24 hours)
+  // Check if data needs refresh (today or this month)
   const needsRefresh = useCallback((tab) => {
     const lastUpdate = lastUpdated[tab];
     if (!lastUpdate) return true;
-    
-    const twentyFourHoursAgo = new Date();
-    twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
-    return new Date(lastUpdate) < twentyFourHoursAgo;
+
+    const updateDate = new Date(lastUpdate);
+    const yearMatch = updateDate.getFullYear() === CURRENT_YEAR;
+    const monthMatch = updateDate.getMonth() === CURRENT_MONTH;
+    const dayMatch = updateDate.getDate() === CURRENT_DAY;
+    return !(yearMatch && (dayMatch || monthMatch)); // Refresh if not today or this month
   }, [lastUpdated]);
 
   // Load data for a specific tab
   const loadTabData = useCallback(async (tab) => {
     if (!userProfile || !tab) return;
 
-    // Return cached data if available and fresh
     if (dynamicData[tab]?.length && !needsRefresh(tab)) {
       return;
     }
@@ -302,26 +287,27 @@ export const useDynamicContent = () => {
     setIsLoading(true);
 
     try {
-      // Handle progress tab separately with local data
       if (tab === "progress") {
+        const todayStr = currentDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+        const monthStr = currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
         const progressData = [
           { 
-            milestone: "Profile Completion", 
-            description: `Profile completed on ${new Date().toLocaleDateString()}`,
-            timeframe: "Immediate" 
+            milestone: `Profile Update ${todayStr}`, 
+            description: `Profile updated on ${todayStr}`,
+            timeframe: "Today" 
           },
           { 
-            milestone: "Skill Development", 
-            description: `Added ${userProfile.skills.length} skills to your profile`,
-            timeframe: "Ongoing" 
+            milestone: "Skill Focus", 
+            description: `Targeted ${userProfile.skills.length} skills today`,
+            timeframe: "Today" 
           },
           { 
-            milestone: "Industry Focus", 
-            description: `Selected ${userProfile.industries.length} industries of interest`,
-            timeframe: "Current" 
+            milestone: "Industry Engagement", 
+            description: `Engaged with ${userProfile.industries.length} industries in ${monthStr}`,
+            timeframe: `Mid ${monthStr}` 
           },
         ];
-        
+
         setDynamicData(prev => ({ ...prev, [tab]: progressData }));
         setLastUpdated(prev => ({ ...prev, [tab]: new Date().toISOString() }));
         return;
@@ -348,26 +334,24 @@ export const useDynamicContent = () => {
     }
   }, [userProfile, dynamicData, createPrompt, generateContent, parseGeneratedContent, needsRefresh]);
 
-  // Force refresh data for a specific tab
+  // Force refresh data for a specific tab (unchanged)
   const refreshTabData = useCallback(async (tab) => {
-    // Clear existing data for the tab
     setDynamicData(prev => ({ ...prev, [tab]: [] }));
-    // Load fresh data
     await loadTabData(tab);
   }, [loadTabData]);
 
-  // Utility function to calculate data freshness as a string
+  // Utility function to calculate data freshness (unchanged)
   const getDataFreshness = useCallback((tab) => {
     const lastUpdate = lastUpdated[tab];
     if (!lastUpdate) return "Never updated";
-    
+
     const updateDate = new Date(lastUpdate);
     const now = new Date();
     const diffMs = now - updateDate;
     const diffMins = Math.floor(diffMs / 60000);
     const diffHrs = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHrs / 24);
-    
+
     if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
     if (diffHrs > 0) return `${diffHrs} hour${diffHrs > 1 ? 's' : ''} ago`;
     if (diffMins > 0) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
@@ -382,6 +366,6 @@ export const useDynamicContent = () => {
     loadTabData,
     refreshTabData,
     getDataFreshness,
-    lastUpdated
+    lastUpdated,
   };
 };
