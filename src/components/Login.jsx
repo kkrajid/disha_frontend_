@@ -20,7 +20,7 @@ const Login = () => {
 
     try {
       await login(phoneNumber, password);
-      navigate("/dashboard", { replace: true });
+      navigate("/profile-setup", { replace: true });
     } catch (err) {
       // Handle different error formats from the backend
       if (typeof err === "object" && err.error) {
